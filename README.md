@@ -136,12 +136,10 @@ cruddy init
 {
   "backend": {
     "path": "./MyApp.Api",
-    "framework": "dotnet"
   },
   "frontend": {
     "path": "./client/src",
     "outputDir": "./client/src/components",
-    "importStyle": "named",
     "baseUrl": "/api"
   },
   "generate": {
