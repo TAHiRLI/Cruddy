@@ -5,7 +5,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    
+
     <!-- Tool Configuration -->
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>cruddy</ToolCommandName>
@@ -13,10 +13,10 @@
     <Version>0.1.0</Version>
     <Authors>Cruddy Team</Authors>
     <Description>CLI tool for generating React CRUD components from .NET entities</Description>
-    
+
     <!-- NuGet Package Metadata -->
-    <PackageProjectUrl>https://github.com/yourusername/cruddy</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/yourusername/cruddy</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/tahirli/cruddy</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/tahirli/cruddy</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

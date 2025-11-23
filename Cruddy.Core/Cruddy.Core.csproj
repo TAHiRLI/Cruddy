@@ -6,8 +6,8 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
-    <PackageId>cruddy.core</PackageId>
-    <Version>1.1.1</Version>
+    <PackageId>Cruddy.Core</PackageId>
+    <Version>1.1.4</Version>
     <Authors>Tahir Tahirli</Authors>
     <Description>Core logic, attributes, and helpers for Cruddy CLI tool</Description>
     <Company>Cruddy Tools</Company>

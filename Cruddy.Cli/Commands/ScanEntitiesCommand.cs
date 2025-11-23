@@ -1,7 +1,4 @@
 using System.Reflection;
-using System.Linq;
-using System.IO;
-using Cruddy.Cli.Core;
 using Cruddy.Core.Attributes;
 
 namespace Cruddy.Cli.Commands

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using Cruddy.Core.Models;
 
 namespace Cruddy.Core.Configuration;
@@ -85,11 +86,14 @@ public class EntityBuilder<TEntity> where TEntity : class
 
     internal EntityMetadata Build()
     {
+        // Clear existing properties to avoid duplicates
+        _metadata.Properties.Clear();
+        
         // Add all configured properties
         foreach (var kvp in _propertyBuilders)
         {
             var builder = kvp.Value;
-            var buildMethod = builder.GetType().GetMethod("Build");
+            var buildMethod = builder.GetType().GetMethod("Build", BindingFlags.NonPublic | BindingFlags.Instance);
             if (buildMethod != null)
             {
                 var propertyMetadata = (PropertyMetadata)buildMethod.Invoke(builder, null)!;
