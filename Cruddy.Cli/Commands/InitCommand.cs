@@ -1,6 +1,11 @@
 using System.Text.Json;
 using Cruddy.Cli.Core;
+using Cruddy.Cli.Helpers;
+using Cruddy.Cli.Models;
+using Cruddy.Cli.Services;
+using Cruddy.Cli.Services.Base;
 using Cruddy.Core.Configuration;
+using Cruddy.Core.Scanner;
 
 namespace Cruddy.Cli.Commands;
 
@@ -84,19 +89,89 @@ public class InitCommand : ICommand
         // Write to file
         await File.WriteAllTextAsync("cruddy.config.json", json);
 
-        Console.WriteLine("\n✅ Configuration created successfully!");
+        ConsoleHelper.WriteSuccess("Configuration created successfully!");
+
+        // Create .cruddy directory structure
+        await CreateCruddyDirectoryStructureAsync();
+
+        // Create initial snapshot
+        await CreateInitialSnapshotAsync(config);
+
         Console.WriteLine("\nNext steps:");
         Console.WriteLine("  1. Create entity configurations in your backend (e.g., Cruddy/UserCruddyConfig.cs)");
-        Console.WriteLine("  2. Run 'dotnet cruddy migrations add <Name>' to create React components");
-        Console.WriteLine("  2. Run 'dotnet cruddy generate' to create React components");
-
+        Console.WriteLine("  2. Run 'cruddy migrations add <Name>' to track your entity changes");
+        Console.WriteLine("  3. Run 'cruddy generate' to create React components");
 
         return 0;
+    }
+
+    private async Task CreateCruddyDirectoryStructureAsync()
+    {
+        var cruddyDir = ".cruddy";
+        var migrationsDir = Path.Combine(cruddyDir, "migrations");
+
+        if (!Directory.Exists(cruddyDir))
+        {
+            Directory.CreateDirectory(cruddyDir);
+            ConsoleHelper.WriteInfo($"Created {cruddyDir}/ directory");
+        }
+
+        if (!Directory.Exists(migrationsDir))
+        {
+            Directory.CreateDirectory(migrationsDir);
+            ConsoleHelper.WriteInfo($"Created {migrationsDir}/ directory");
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private async Task CreateInitialSnapshotAsync(CruddyConfig config)
+    {
+        try
+        {
+            var fileSystem = new FileSystemService();
+            var assemblyLoader = new AssemblyLoaderService(fileSystem);
+
+            ConsoleHelper.WriteInfo("Scanning backend for entity configurations...");
+
+            // Load backend assembly
+            var assembly = await assemblyLoader.LoadBackendAssemblyAsync(config.Backend.Path, build: true);
+
+            // Scan for entity configurations
+            var scanner = new ConfigurationScanner();
+            var entities = scanner.ScanAssembly(assembly);
+
+            // Create initial snapshot
+            var snapshot = new Snapshot
+            {
+                Version = "1.0.0",
+                LastMigration = null,
+                AppliedMigrations = new List<string>(),
+                Entities = entities
+            };
+
+            var snapshotPath = Path.Combine(".cruddy", "snapshot.json");
+            var snapshotJson = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+
+            await File.WriteAllTextAsync(snapshotPath, snapshotJson);
+
+            ConsoleHelper.WriteSuccess($"Initial snapshot created with {entities.Count} entity/entities");
+        }
+        catch (Exception ex)
+        {
+            ConsoleHelper.WriteWarning($"Could not create initial snapshot: {ex.Message}");
+            ConsoleHelper.WriteInfo("You can create a snapshot later by running 'cruddy migrations add <Name>'");
+        }
     }
 
     private async Task CreateDefaultTemplatesAsync(string path)
     {
         if (!Directory.Exists(path))
             Directory.CreateDirectory(path);
+        await Task.CompletedTask;
     }
 }

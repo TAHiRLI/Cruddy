@@ -63,16 +63,165 @@ namespace Cruddy.Cli.Services
         /// Detects changes between current entities and snapshot
         /// </summary>
         public List<MigrationChange> DetectChanges(
-            List<EntityMetadata> currentEntities, 
+            List<EntityMetadata> currentEntities,
             List<EntityMetadata> snapshotEntities)
         {
             var changes = new List<MigrationChange>();
 
-            // For now, return empty changes - this will be implemented
-            // when we have entity scanning functionality
-            // TODO: Implement change detection logic
+            // Create lookup dictionaries for faster comparisons
+            var currentEntitiesDict = currentEntities.ToDictionary(e => e.Name);
+            var snapshotEntitiesDict = snapshotEntities.ToDictionary(e => e.Name);
+
+            // Check for new entities and modifications
+            foreach (var currentEntity in currentEntities)
+            {
+                if (!snapshotEntitiesDict.ContainsKey(currentEntity.Name))
+                {
+                    // Entity was added
+                    changes.Add(new EntityAddedChange
+                    {
+                        Type = "EntityAdded",
+                        EntityName = currentEntity.Name,
+                        Entity = currentEntity
+                    });
+                }
+                else
+                {
+                    // Entity exists - check for property changes
+                    var snapshotEntity = snapshotEntitiesDict[currentEntity.Name];
+                    var propertyChanges = DetectPropertyChanges(currentEntity, snapshotEntity);
+                    changes.AddRange(propertyChanges);
+                }
+            }
+
+            // Check for removed entities
+            foreach (var snapshotEntity in snapshotEntities)
+            {
+                if (!currentEntitiesDict.ContainsKey(snapshotEntity.Name))
+                {
+                    // Entity was removed
+                    changes.Add(new EntityRemovedChange
+                    {
+                        Type = "EntityRemoved",
+                        EntityName = snapshotEntity.Name
+                    });
+                }
+            }
 
             return changes;
+        }
+
+        /// <summary>
+        /// Detects property-level changes for an entity
+        /// </summary>
+        private List<MigrationChange> DetectPropertyChanges(
+            EntityMetadata currentEntity,
+            EntityMetadata snapshotEntity)
+        {
+            var changes = new List<MigrationChange>();
+
+            var currentPropsDict = currentEntity.Properties.ToDictionary(p => p.Name);
+            var snapshotPropsDict = snapshotEntity.Properties.ToDictionary(p => p.Name);
+
+            // Check for new and modified properties
+            foreach (var currentProp in currentEntity.Properties)
+            {
+                if (!snapshotPropsDict.ContainsKey(currentProp.Name))
+                {
+                    // Property was added
+                    changes.Add(new FieldAddedChange
+                    {
+                        Type = "FieldAdded",
+                        EntityName = currentEntity.Name,
+                        Field = currentProp
+                    });
+                }
+                else
+                {
+                    // Property exists - check for modifications
+                    var snapshotProp = snapshotPropsDict[currentProp.Name];
+                    var propertyModifications = CompareProperties(currentProp, snapshotProp);
+
+                    if (propertyModifications.Count > 0)
+                    {
+                        changes.Add(new FieldModifiedChange
+                        {
+                            Type = "FieldModified",
+                            EntityName = currentEntity.Name,
+                            FieldName = currentProp.Name,
+                            Changes = propertyModifications
+                        });
+                    }
+                }
+            }
+
+            // Check for removed properties
+            foreach (var snapshotProp in snapshotEntity.Properties)
+            {
+                if (!currentPropsDict.ContainsKey(snapshotProp.Name))
+                {
+                    // Property was removed
+                    changes.Add(new FieldRemovedChange
+                    {
+                        Type = "FieldRemoved",
+                        EntityName = currentEntity.Name,
+                        FieldName = snapshotProp.Name
+                    });
+                }
+            }
+
+            return changes;
+        }
+
+        /// <summary>
+        /// Compares two PropertyMetadata objects and returns differences
+        /// </summary>
+        private Dictionary<string, FieldPropertyChange> CompareProperties(
+            PropertyMetadata current,
+            PropertyMetadata snapshot)
+        {
+            var changes = new Dictionary<string, FieldPropertyChange>();
+
+            // Compare important fields
+            CompareField(changes, "DisplayName", current.DisplayName, snapshot.DisplayName);
+            CompareField(changes, "HelpText", current.HelpText, snapshot.HelpText);
+            CompareField(changes, "Placeholder", current.Placeholder, snapshot.Placeholder);
+            CompareField(changes, "FieldType", current.FieldType, snapshot.FieldType);
+            CompareField(changes, "Format", current.Format, snapshot.Format);
+            CompareField(changes, "IsRequired", current.IsRequired, snapshot.IsRequired);
+            CompareField(changes, "IsReadOnly", current.IsReadOnly, snapshot.IsReadOnly);
+            CompareField(changes, "IsUnique", current.IsUnique, snapshot.IsUnique);
+            CompareField(changes, "MinLength", current.MinLength, snapshot.MinLength);
+            CompareField(changes, "MaxLength", current.MaxLength, snapshot.MaxLength);
+            CompareField(changes, "MinValue", current.MinValue, snapshot.MinValue);
+            CompareField(changes, "MaxValue", current.MaxValue, snapshot.MaxValue);
+            CompareField(changes, "ShowInList", current.ShowInList, snapshot.ShowInList);
+            CompareField(changes, "ShowInForm", current.ShowInForm, snapshot.ShowInForm);
+            CompareField(changes, "ShowInDetail", current.ShowInDetail, snapshot.ShowInDetail);
+            CompareField(changes, "RequiredMessage", current.RequiredMessage, snapshot.RequiredMessage);
+            CompareField(changes, "ValidationPattern", current.ValidationPattern, snapshot.ValidationPattern);
+            CompareField(changes, "ValidationMessage", current.ValidationMessage, snapshot.ValidationMessage);
+
+            return changes;
+        }
+
+        /// <summary>
+        /// Compares a single field and adds to changes if different
+        /// </summary>
+        private void CompareField<T>(
+            Dictionary<string, FieldPropertyChange> changes,
+            string fieldName,
+            T? currentValue,
+            T? snapshotValue)
+        {
+            if (!EqualityComparer<T>.Default.Equals(currentValue, snapshotValue))
+            {
+                changes[fieldName] = new FieldPropertyChange
+                {
+                    Old = snapshotValue,
+                    New = currentValue
+                };
+            }
         }
     }
 }
