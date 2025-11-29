@@ -84,7 +84,85 @@ namespace Cruddy.Cli.Commands
             ConsoleHelper.WriteSuccess($"Migration created: {Path.GetFileName(filePath)}");
             ConsoleHelper.WriteInfo($"Location: {filePath}");
 
+            // Show summary of changes
+            await ShowMigrationSummaryAsync(filePath);
+
             return 0;
+        }
+
+        private async Task ShowMigrationSummaryAsync(string migrationFilePath)
+        {
+            try
+            {
+                var json = await File.ReadAllTextAsync(migrationFilePath);
+                var migration = System.Text.Json.JsonSerializer.Deserialize<Cruddy.Cli.Models.Migration>(
+                    json,
+                    new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                    });
+
+                if (migration == null || migration.Changes.Count == 0)
+                {
+                    ConsoleHelper.WriteWarning("No changes detected");
+                    return;
+                }
+
+                Console.WriteLine();
+                ConsoleHelper.WriteHeader("Changes Summary");
+
+                foreach (var change in migration.Changes)
+                {
+                    switch (change.Type)
+                    {
+                        case "EntityAdded":
+                            var entityAdded = change as Cruddy.Cli.Models.EntityAddedChange;
+                            ConsoleHelper.WriteSuccess($"+ Entity added: {change.EntityName}");
+                            if (entityAdded?.Entity?.Properties != null)
+                            {
+                                Console.WriteLine($"  Properties: {entityAdded.Entity.Properties.Count}");
+                            }
+                            break;
+
+                        case "EntityRemoved":
+                            ConsoleHelper.WriteError($"- Entity removed: {change.EntityName}");
+                            break;
+
+                        case "FieldAdded":
+                            var fieldAdded = change as Cruddy.Cli.Models.FieldAddedChange;
+                            ConsoleHelper.WriteSuccess($"+ Field added: {change.EntityName}.{fieldAdded?.Field?.Name}");
+                            break;
+
+                        case "FieldRemoved":
+                            var fieldRemoved = change as Cruddy.Cli.Models.FieldRemovedChange;
+                            ConsoleHelper.WriteError($"- Field removed: {change.EntityName}.{fieldRemoved?.FieldName}");
+                            break;
+
+                        case "FieldModified":
+                            var fieldModified = change as Cruddy.Cli.Models.FieldModifiedChange;
+                            ConsoleHelper.WriteWarning($"~ Field modified: {change.EntityName}.{fieldModified?.FieldName}");
+                            if (fieldModified?.Changes != null)
+                            {
+                                foreach (var prop in fieldModified.Changes.Take(3)) // Show first 3 changes
+                                {
+                                    Console.WriteLine($"    {prop.Key}: {prop.Value.Old} → {prop.Value.New}");
+                                }
+                                if (fieldModified.Changes.Count > 3)
+                                {
+                                    Console.WriteLine($"    ... and {fieldModified.Changes.Count - 3} more changes");
+                                }
+                            }
+                            break;
+                    }
+                }
+
+                Console.WriteLine();
+                ConsoleHelper.WriteInfo($"Total changes: {migration.Changes.Count}");
+            }
+            catch (Exception ex)
+            {
+                ConsoleHelper.WriteWarning($"Could not read migration summary: {ex.Message}");
+            }
         }
 
         private async Task<int> RemoveMigration(string[] args)

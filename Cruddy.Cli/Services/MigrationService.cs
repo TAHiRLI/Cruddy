@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Cruddy.Cli.Models;
 using Cruddy.Cli.Services.Base;
+using Cruddy.Core.Scanner;
 
 namespace Cruddy.Cli.Services
 {
@@ -11,6 +12,8 @@ namespace Cruddy.Cli.Services
     {
         private readonly IFileSystemService _fileSystem;
         private readonly MigrationGenerator _generator;
+        private readonly ConfigService _configService;
+        private readonly AssemblyLoaderService _assemblyLoader;
         private readonly JsonSerializerOptions _jsonOptions;
         private readonly string _migrationsPath;
         private readonly string _snapshotPath;
@@ -22,11 +25,13 @@ namespace Cruddy.Cli.Services
         {
             _fileSystem = fileSystem;
             _generator = new MigrationGenerator(fileSystem);
-            
+            _configService = new ConfigService(fileSystem);
+            _assemblyLoader = new AssemblyLoaderService(fileSystem);
+
             var currentDir = _fileSystem.GetCurrentDirectory();
             _migrationsPath = migrationsPath ?? _fileSystem.CombinePaths(currentDir, ".cruddy", "migrations");
             _snapshotPath = snapshotPath ?? _fileSystem.CombinePaths(currentDir, ".cruddy", "snapshot.json");
-            
+
             _jsonOptions = new JsonSerializerOptions
             {
                 WriteIndented = true,
@@ -43,23 +48,31 @@ namespace Cruddy.Cli.Services
         {
             EnsureInitialized();
 
+            // Load configuration
+            var config = await _configService.LoadConfigAsync();
+
+            // Load backend assembly and scan for entities
+            var assembly = await _assemblyLoader.LoadBackendAssemblyAsync(config.Backend.Path);
+            var scanner = new ConfigurationScanner();
+            var currentEntities = scanner.ScanAssembly(assembly);
+
             // Get current snapshot
             var snapshot = await GetSnapshotAsync();
 
-            // For now, create an empty migration
-            // TODO: Implement entity scanning and change detection
-            var changes = new List<MigrationChange>();
+            // Detect changes between current state and snapshot
+            var changes = _generator.DetectChanges(currentEntities, snapshot.Entities);
 
             // Create the migration file
             var filePath = await _generator.CreateMigrationFileAsync(
-                _migrationsPath, 
-                migrationName, 
+                _migrationsPath,
+                migrationName,
                 changes);
 
-            // Update snapshot with new migration
+            // Update snapshot with new migration and current entities
             var migrationId = _generator.GenerateMigrationId(migrationName);
             snapshot.LastMigration = migrationId;
             snapshot.AppliedMigrations.Add(migrationId);
+            snapshot.Entities = currentEntities; // Update entities to current state
             await SaveSnapshotAsync(snapshot);
 
             return filePath;
