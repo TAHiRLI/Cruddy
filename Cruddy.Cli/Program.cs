@@ -17,9 +17,8 @@ class Program
         var commands = new List<ICommand>
         {
             new CheckCommand(),
-            // new ScanEntitiesCommand(), 
             new InitCommand(), 
-            // future: new GenerateCommand(), new ScanCommand(), etc.
+            new MigrationsCommand(), 
         };
 
         var commandName = args[0];

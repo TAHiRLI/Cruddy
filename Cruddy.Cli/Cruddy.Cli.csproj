@@ -10,7 +10,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>cruddy</ToolCommandName>
     <PackageId>Cruddy.Cli</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.2</Version>
     <Authors>Cruddy Team</Authors>
     <Description>CLI tool for generating React CRUD components from .NET entities</Description>
 

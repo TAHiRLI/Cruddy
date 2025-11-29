@@ -66,10 +66,13 @@ public class InitCommand : ICommand
             },
             Generate = new GenerateConfig
             {
-                Extension = ".cruddy.tsx"
+                Extension = ".cruddy.tsx",
+                TemplatePath = "./.cruddy/templates/react-ts/"
             },
+
             Customized = new List<string>()
         };
+        await CreateDefaultTemplatesAsync(config.Generate.TemplatePath);
 
         // Serialize to JSON
         var options = new JsonSerializerOptions
@@ -84,25 +87,16 @@ public class InitCommand : ICommand
         Console.WriteLine("\n✅ Configuration created successfully!");
         Console.WriteLine("\nNext steps:");
         Console.WriteLine("  1. Create entity configurations in your backend (e.g., Cruddy/UserCruddyConfig.cs)");
-        Console.WriteLine("  2. Run 'cruddy generate' to create React components");
-        Console.WriteLine("\nExample configuration:");
-        Console.WriteLine(@"
-  public class UserCruddyConfig : CruddyEntityConfig<User>
-  {
-      public UserCruddyConfig()
-      {
-          ForEntity()
-              .HasDisplayName(""User"")
-              .HasPluralName(""Users"");
+        Console.WriteLine("  2. Run 'dotnet cruddy migrations add <Name>' to create React components");
+        Console.WriteLine("  2. Run 'dotnet cruddy generate' to create React components");
 
-          ForProperty(x => x.Name)
-              .IsRequired()
-              .ShowInList()
-              .ShowInForm();
-      }
-  }
-");
 
         return 0;
+    }
+
+    private async Task CreateDefaultTemplatesAsync(string path)
+    {
+        if (!Directory.Exists(path))
+            Directory.CreateDirectory(path);
     }
 }

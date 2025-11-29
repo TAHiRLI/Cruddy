@@ -35,4 +35,5 @@ public class FrontendConfig
 public class GenerateConfig
 {
     public string Extension { get; set; } = ".cruddy.tsx";
+    public string TemplatePath { get; set; } = "./templates/react-ts/"; 
 }

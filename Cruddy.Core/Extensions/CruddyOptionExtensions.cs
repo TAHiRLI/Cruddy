@@ -26,7 +26,7 @@ public class CruddyOptions
 /// <summary>
 /// Service collection extensions for Cruddy
 /// </summary>
-public static class ServiceCollectionExtensions
+public static class CruddyOptionExtensions
 {
     public static IServiceCollection AddCruddy(
         this IServiceCollection services,
