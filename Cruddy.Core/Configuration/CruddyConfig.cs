@@ -16,7 +16,7 @@ public class CruddyConfig
 /// </summary>
 public class BackendConfig
 {
-    public string Path { get; set; } = "./MyApp.Api";
+    public string Path { get; set; } = "./CruddyTest.Api";
 }
 
 /// <summary>

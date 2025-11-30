@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Cruddy.Cli.Services.Base;
 
@@ -26,12 +25,15 @@ namespace Cruddy.Cli.Services
         /// <returns>Loaded assembly</returns>
         public async Task<Assembly> LoadBackendAssemblyAsync(string backendPath, bool build = true)
         {
-            // Find .csproj file
-            var projectFile = FindProjectFile(backendPath);
+            var absolutePath = Path.IsPathRooted(backendPath)
+       ? backendPath
+       : Path.GetFullPath(backendPath, Directory.GetCurrentDirectory());
+
+            var projectFile = FindProjectFile(absolutePath);
             if (projectFile == null)
             {
                 throw new InvalidOperationException(
-                    $"No .csproj file found in '{backendPath}'. Please check your backend path in cruddy.config.json");
+                    $"No .csproj file found in '{absolutePath}'. Please check your backend path in cruddy.config.json");
             }
 
             // Get target framework and assembly name
@@ -44,12 +46,12 @@ namespace Cruddy.Cli.Services
             }
 
             // Find the compiled .dll
-            var dllPath = FindCompiledAssembly(backendPath, assemblyName, targetFramework);
+            var dllPath = FindCompiledAssembly(absolutePath, assemblyName, targetFramework);
             if (dllPath == null)
             {
                 throw new InvalidOperationException(
                     $"Could not find compiled assembly for '{assemblyName}'. " +
-                    $"Expected path: {backendPath}/bin/Debug/{targetFramework}/{assemblyName}.dll\n" +
+                    $"Expected path: {absolutePath}/bin/Debug/{targetFramework}/{assemblyName}.dll\n" +
                     "Try building your project first with 'dotnet build'");
             }
 
@@ -66,6 +68,92 @@ namespace Cruddy.Cli.Services
             }
         }
 
+        /// <summary>
+        /// Loads all assemblies from the specified path
+        /// </summary>
+        /// <param name="backendPath">Path to the backend project directory</param>
+        /// <param name="build">Whether to build the project first (default: true)</param>
+        /// <returns>List of successfully loaded assemblies</returns>
+        public async Task<List<Assembly>> LoadAllAssembliesAsync(string backendPath, bool build = true)
+        {
+            var absolutePath = Path.IsPathRooted(backendPath)
+                ? backendPath
+                : Path.GetFullPath(backendPath, Directory.GetCurrentDirectory());
+
+            // Find .csproj file
+            var projectFile = FindProjectFile(absolutePath);
+            if (projectFile == null)
+            {
+                throw new InvalidOperationException(
+                    $"No .csproj file found in '{absolutePath}'. Please check your backend path in cruddy.config.json");
+            }
+
+            // Get target framework
+            var (targetFramework, assemblyName) = GetProjectInfo(projectFile);
+
+            // Build if requested
+            if (build)
+            {
+                await BuildProjectAsync(projectFile);
+            }
+
+            // Find the output directory
+            var outputDir = FindOutputDirectory(absolutePath, targetFramework);
+            if (outputDir == null || !Directory.Exists(outputDir))
+            {
+                throw new InvalidOperationException(
+                    $"Could not find output directory for target framework '{targetFramework}'. " +
+                    $"Try building your project first with 'dotnet build'");
+            }
+
+            // Set up assembly resolution for the output directory
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+            {
+                var assemblyName = new AssemblyName(args.Name);
+                var dllPath = Path.Combine(outputDir, $"{assemblyName.Name}.dll");
+
+                if (File.Exists(dllPath))
+                {
+                    try
+                    {
+                        return Assembly.LoadFrom(dllPath);
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                }
+                return null;
+            };
+
+            // Load all assemblies from the output directory
+            var assemblies = new List<Assembly>();
+            var dlls = Directory.GetFiles(outputDir, "*.dll");
+
+
+            foreach (var dll in dlls)
+            {
+                try
+                {
+                    var asm = Assembly.LoadFrom(dll);
+                    assemblies.Add(asm);
+                    Console.WriteLine($"  ✓ Loaded: {Path.GetFileName(dll)}");
+                }
+                catch (Exception ex)
+                {
+                    // Only log, don't fail - some DLLs might be native or incompatible
+                    Console.WriteLine($"  ⊗ Skipped: {Path.GetFileName(dll)} ({ex.GetType().Name})");
+                }
+            }
+
+            if (assemblies.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"No assemblies could be loaded from '{outputDir}'");
+            }
+
+            return assemblies;
+        }
         /// <summary>
         /// Finds the .csproj file in the given directory
         /// </summary>
@@ -111,10 +199,16 @@ namespace Cruddy.Cli.Services
         /// </summary>
         private async Task BuildProjectAsync(string projectFile)
         {
+            Console.WriteLine($"Building and publishing project: {Path.GetFileName(projectFile)}...");
+
+            var projectDir = Path.GetDirectoryName(projectFile)!;
+            var publishDir = Path.Combine(projectDir, "bin", "publish");
+
+            // Use publish instead of build to get all dependencies
             var startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"build \"{projectFile}\" --verbosity quiet",
+                Arguments = $"publish \"{projectFile}\" -o \"{publishDir}\" --verbosity quiet --no-restore",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -124,7 +218,7 @@ namespace Cruddy.Cli.Services
             using var process = Process.Start(startInfo);
             if (process == null)
             {
-                throw new InvalidOperationException("Failed to start dotnet build process");
+                throw new InvalidOperationException("Failed to start dotnet publish process");
             }
 
             var output = await process.StandardOutput.ReadToEndAsync();
@@ -134,12 +228,13 @@ namespace Cruddy.Cli.Services
             if (process.ExitCode != 0)
             {
                 throw new InvalidOperationException(
-                    $"Build failed with exit code {process.ExitCode}\n" +
+                    $"Publish failed with exit code {process.ExitCode}\n" +
                     $"Output: {output}\n" +
                     $"Error: {error}");
             }
-        }
 
+            Console.WriteLine("Publish completed successfully");
+        }
         /// <summary>
         /// Finds the compiled assembly .dll file
         /// </summary>
@@ -160,6 +255,38 @@ namespace Cruddy.Cli.Services
                 if (_fileSystem.FileExists(dllPath))
                 {
                     return dllPath;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Finds the output directory containing compiled assemblies
+        /// </summary>
+        private string? FindOutputDirectory(string backendPath, string targetFramework)
+        {
+            // First try the publish directory
+            var publishDir = Path.Combine(backendPath, "bin", "publish");
+            if (Directory.Exists(publishDir))
+            {
+                return publishDir;
+            }
+
+            // Fall back to Debug/Release
+            var configurations = new[] { "Debug", "Release" };
+
+            foreach (var config in configurations)
+            {
+                var outputDir = _fileSystem.CombinePaths(
+                    backendPath,
+                    "bin",
+                    config,
+                    targetFramework);
+
+                if (_fileSystem.DirectoryExists(outputDir))
+                {
+                    return outputDir;
                 }
             }
 

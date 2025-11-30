@@ -1,6 +1,8 @@
 using System.Text.Json;
+using Cruddy.Cli.Helpers;
 using Cruddy.Cli.Models;
 using Cruddy.Cli.Services.Base;
+using Cruddy.Core.Models;
 using Cruddy.Core.Scanner;
 
 namespace Cruddy.Cli.Services
@@ -14,7 +16,6 @@ namespace Cruddy.Cli.Services
         private readonly MigrationGenerator _generator;
         private readonly ConfigService _configService;
         private readonly AssemblyLoaderService _assemblyLoader;
-        private readonly JsonSerializerOptions _jsonOptions;
         private readonly string _migrationsPath;
         private readonly string _snapshotPath;
 
@@ -31,12 +32,6 @@ namespace Cruddy.Cli.Services
             var currentDir = _fileSystem.GetCurrentDirectory();
             _migrationsPath = migrationsPath ?? _fileSystem.CombinePaths(currentDir, ".cruddy", "migrations");
             _snapshotPath = snapshotPath ?? _fileSystem.CombinePaths(currentDir, ".cruddy", "snapshot.json");
-
-            _jsonOptions = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
         }
 
         public bool IsMigrationDirectoryInitialized()
@@ -52,9 +47,27 @@ namespace Cruddy.Cli.Services
             var config = await _configService.LoadConfigAsync();
 
             // Load backend assembly and scan for entities
-            var assembly = await _assemblyLoader.LoadBackendAssemblyAsync(config.Backend.Path);
+            var assemblies = await _assemblyLoader.LoadAllAssembliesAsync(config.Backend.Path);
             var scanner = new ConfigurationScanner();
-            var currentEntities = scanner.ScanAssembly(assembly);
+            var currentEntities = new List<EntityMetadata>();
+
+            foreach (var assembly in assemblies)
+            {
+                try
+                {
+                    var entities = scanner.ScanAssembly(assembly);
+                    if (entities.Count > 0)
+                    {
+                        Console.WriteLine($"  Found {entities.Count} entity configuration(s) in {assembly.GetName().Name}");
+                        currentEntities.AddRange(entities);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"  ⊗ Skipped {assembly.GetName().Name} ({ex.GetType().Name})");
+                }
+
+            }
 
             // Get current snapshot
             var snapshot = await GetSnapshotAsync();
@@ -83,7 +96,7 @@ namespace Cruddy.Cli.Services
             EnsureInitialized();
 
             var snapshot = await GetSnapshotAsync();
-            
+
             if (snapshot.AppliedMigrations.Count == 0)
             {
                 return false;
@@ -98,8 +111,8 @@ namespace Cruddy.Cli.Services
             }
 
             snapshot.AppliedMigrations.RemoveAt(snapshot.AppliedMigrations.Count - 1);
-            snapshot.LastMigration = snapshot.AppliedMigrations.Count > 0 
-                ? snapshot.AppliedMigrations.Last() 
+            snapshot.LastMigration = snapshot.AppliedMigrations.Count > 0
+                ? snapshot.AppliedMigrations.Last()
                 : null;
 
             await SaveSnapshotAsync(snapshot);
@@ -117,7 +130,7 @@ namespace Cruddy.Cli.Services
             foreach (var file in migrationFiles)
             {
                 var json = await _fileSystem.ReadFileAsync(file);
-                var migration = JsonSerializer.Deserialize<Migration>(json, _jsonOptions);
+                var migration = JsonSerializer.Deserialize<Migration>(json, JsonHelper.GetOptions());
                 if (migration != null)
                 {
                     migrations.Add(migration);
@@ -135,12 +148,12 @@ namespace Cruddy.Cli.Services
             }
 
             var json = await _fileSystem.ReadFileAsync(_snapshotPath);
-            return JsonSerializer.Deserialize<Snapshot>(json, _jsonOptions) ?? new Snapshot();
+            return JsonSerializer.Deserialize<Snapshot>(json, JsonHelper.GetOptions()) ?? new Snapshot();
         }
 
         private async Task SaveSnapshotAsync(Snapshot snapshot)
         {
-            var json = JsonSerializer.Serialize(snapshot, _jsonOptions);
+            var json = JsonSerializer.Serialize(snapshot, JsonHelper.GetOptions());
             await _fileSystem.WriteFileAsync(_snapshotPath, json);
         }
 

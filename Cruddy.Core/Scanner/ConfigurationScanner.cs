@@ -36,10 +36,10 @@ public class ConfigurationScanner
                 if (getMetadataMethod != null)
                 {
                     var entityMetadata = (EntityMetadata)getMetadataMethod.Invoke(configInstance, null)!;
-                    
+
                     // Apply convention-based defaults for unconfigured properties
                     ApplyConventions(entityMetadata);
-                    
+
                     metadata.Add(entityMetadata);
                 }
             }

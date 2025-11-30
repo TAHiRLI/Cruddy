@@ -95,12 +95,7 @@ namespace Cruddy.Cli.Commands
             try
             {
                 var json = await File.ReadAllTextAsync(migrationFilePath);
-                var migration = System.Text.Json.JsonSerializer.Deserialize<Cruddy.Cli.Models.Migration>(
-                    json,
-                    new System.Text.Json.JsonSerializerOptions
-                    {
-                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-                    });
+                var migration = System.Text.Json.JsonSerializer.Deserialize<Cruddy.Cli.Models.Migration>(json,JsonHelper.GetOptions());
 
                 if (migration == null || migration.Changes.Count == 0)
                 {
@@ -231,7 +226,7 @@ namespace Cruddy.Cli.Commands
 
         private bool IsValidMigrationName(string name)
         {
-            return !string.IsNullOrWhiteSpace(name) && 
+            return !string.IsNullOrWhiteSpace(name) &&
                    name.All(c => char.IsLetterOrDigit(c) || c == '_');
         }
     }

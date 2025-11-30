@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Cruddy.Cli.Helpers;
 using Cruddy.Cli.Services.Base;
 using Cruddy.Core.Configuration;
 
@@ -11,19 +12,12 @@ namespace Cruddy.Cli.Services
     {
         private readonly IFileSystemService _fileSystem;
         private readonly string _configPath;
-        private readonly JsonSerializerOptions _jsonOptions;
 
         public ConfigService(IFileSystemService fileSystem, string? configPath = null)
         {
             _fileSystem = fileSystem;
             var currentDir = _fileSystem.GetCurrentDirectory();
             _configPath = configPath ?? _fileSystem.CombinePaths(currentDir, "cruddy.config.json");
-
-            _jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                PropertyNameCaseInsensitive = true
-            };
         }
 
         /// <summary>
@@ -38,7 +32,7 @@ namespace Cruddy.Cli.Services
             }
 
             var json = await _fileSystem.ReadFileAsync(_configPath);
-            var config = JsonSerializer.Deserialize<CruddyConfig>(json, _jsonOptions);
+            var config = JsonSerializer.Deserialize<CruddyConfig>(json, JsonHelper.GetOptions());
 
             if (config == null)
             {
@@ -53,11 +47,7 @@ namespace Cruddy.Cli.Services
         /// </summary>
         public async Task SaveConfigAsync(CruddyConfig config)
         {
-            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            var json = JsonSerializer.Serialize(config, JsonHelper.GetOptions());
 
             await _fileSystem.WriteFileAsync(_configPath, json);
         }

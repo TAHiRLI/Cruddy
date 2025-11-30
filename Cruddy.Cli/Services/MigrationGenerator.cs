@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Cruddy.Cli.Helpers;
 using Cruddy.Cli.Models;
 using Cruddy.Cli.Services.Base;
 using Cruddy.Core.Models;
@@ -11,16 +12,10 @@ namespace Cruddy.Cli.Services
     public class MigrationGenerator
     {
         private readonly IFileSystemService _fileSystem;
-        private readonly JsonSerializerOptions _jsonOptions;
 
         public MigrationGenerator(IFileSystemService fileSystem)
         {
             _fileSystem = fileSystem;
-            _jsonOptions = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
         }
 
         /// <summary>
@@ -36,8 +31,8 @@ namespace Cruddy.Cli.Services
         /// Creates a migration file
         /// </summary>
         public async Task<string> CreateMigrationFileAsync(
-            string migrationsPath, 
-            string migrationName, 
+            string migrationsPath,
+            string migrationName,
             List<MigrationChange> changes)
         {
             var migrationId = GenerateMigrationId(migrationName);
@@ -52,8 +47,8 @@ namespace Cruddy.Cli.Services
 
             var fileName = $"{migrationId}.json";
             var filePath = _fileSystem.CombinePaths(migrationsPath, fileName);
-            
-            var json = JsonSerializer.Serialize(migration, _jsonOptions);
+
+            var json = JsonSerializer.Serialize(migration, JsonHelper.GetOptions());
             await _fileSystem.WriteFileAsync(filePath, json);
 
             return filePath;
@@ -67,8 +62,6 @@ namespace Cruddy.Cli.Services
             List<EntityMetadata> snapshotEntities)
         {
             var changes = new List<MigrationChange>();
-
-            // Create lookup dictionaries for faster comparisons
             var currentEntitiesDict = currentEntities.ToDictionary(e => e.Name);
             var snapshotEntitiesDict = snapshotEntities.ToDictionary(e => e.Name);
 
@@ -107,7 +100,7 @@ namespace Cruddy.Cli.Services
                     });
                 }
             }
-
+            
             return changes;
         }
 
@@ -190,17 +183,11 @@ namespace Cruddy.Cli.Services
             CompareField(changes, "Format", current.Format, snapshot.Format);
             CompareField(changes, "IsRequired", current.IsRequired, snapshot.IsRequired);
             CompareField(changes, "IsReadOnly", current.IsReadOnly, snapshot.IsReadOnly);
-            CompareField(changes, "IsUnique", current.IsUnique, snapshot.IsUnique);
             CompareField(changes, "MinLength", current.MinLength, snapshot.MinLength);
             CompareField(changes, "MaxLength", current.MaxLength, snapshot.MaxLength);
-            CompareField(changes, "MinValue", current.MinValue, snapshot.MinValue);
-            CompareField(changes, "MaxValue", current.MaxValue, snapshot.MaxValue);
             CompareField(changes, "ShowInList", current.ShowInList, snapshot.ShowInList);
             CompareField(changes, "ShowInForm", current.ShowInForm, snapshot.ShowInForm);
-            CompareField(changes, "ShowInDetail", current.ShowInDetail, snapshot.ShowInDetail);
             CompareField(changes, "RequiredMessage", current.RequiredMessage, snapshot.RequiredMessage);
-            CompareField(changes, "ValidationPattern", current.ValidationPattern, snapshot.ValidationPattern);
-            CompareField(changes, "ValidationMessage", current.ValidationMessage, snapshot.ValidationMessage);
 
             return changes;
         }
